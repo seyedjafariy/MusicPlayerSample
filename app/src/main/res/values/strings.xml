@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">MediaSessionSample</string>
+    <string name="action_settings">Settings</string>
+    <!-- Strings used for fragments for navigation -->
+    <string name="first_fragment_label">First Fragment</string>
+    <string name="second_fragment_label">Second Fragment</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+
+    <string name="hello_first_fragment">Hello first fragment</string>
+    <string name="hello_second_fragment">Hello second fragment. Arg: %1$s</string>
+
+
+
+    <string name="player_notification_channel_description">This channel is used to show the playback notification only</string>
+    <string name="player_notification_channel_name">Player</string>
+    <string name="player_notification_next_aya">Next</string>
+    <string name="player_notification_previous_aya">Previous</string>
+    <string name="player_notification_stop">Stop</string>
+    <string name="player_notification_play">Play</string>
+    <string name="player_notification_pause">Play</string>
+
+
+    <!-- Allowed caller template -->
+    <string name="allowed_caller_log">
+        Caller has a valid certificate, but its package doesn\'t match any expected package for the
+        given certificate. To allow this caller, add the following to the allowed callers list:\n
+        <![CDATA[
+        <signature name=\"%1$s\" package=\"%2$s\">\n\t<key>%3$s</key>\n</signature>\n
+        ]]>
+    </string>
+</resources>
