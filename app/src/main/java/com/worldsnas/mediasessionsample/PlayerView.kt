@@ -11,6 +11,7 @@ import android.os.Build
 import android.support.v4.media.session.MediaSessionCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.net.toUri
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.SimpleExoPlayer
@@ -18,6 +19,7 @@ import com.google.android.exoplayer2.source.ConcatenatingMediaSource
 import com.google.android.exoplayer2.source.MediaSource
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.upstream.FileDataSource
+import com.worldsnas.mediasessionsample.AyaMediaItem.Companion.STARTING_AYA_ORDER_ID
 
 class PlayerView(
     private val context: Service,
@@ -98,18 +100,24 @@ class PlayerView(
     }
 
     fun loadAndPlay(ayaMediaItem: AyaMediaItem) {
-        playMediaSource(listOf(ayaMediaItem.createMediaSource()))
-    }
-
-    fun loadAndPlay(items: List<AyaMediaItem>) {
-        playMediaSource(items.map { it.createMediaSource() })
-    }
-
-    private fun playMediaSource(sources: List<MediaSource>) {
-        mediaSourceBag.clear()
-        mediaSourceBag.addMediaSources(sources)
+        loadMediaSource(listOf(ayaMediaItem.createMediaSource()))
 
         play()
+    }
+
+    fun loadAndPlay(items: List<AyaMediaItem>, startingAya: Long = STARTING_AYA_ORDER_ID) {
+        loadMediaSource(items.map { it.createMediaSource() })
+
+        if (startingAya == STARTING_AYA_ORDER_ID) {
+            play()
+        }else{
+            playAya(startingAya)
+        }
+    }
+
+    private fun loadMediaSource(sources: List<MediaSource>) {
+        mediaSourceBag.clear()
+        mediaSourceBag.addMediaSources(sources)
     }
 
     fun isPaused(): Boolean =
@@ -236,11 +244,15 @@ class PlayerView(
             this.action = action
         }
 
-    private fun AyaMediaItem.createMediaSource() : MediaSource =
+    private fun AyaMediaItem.createMediaSource(): MediaSource =
         ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(toExoMediaItem())
 }
 
-private fun AyaMediaItem.toExoMediaItem(): MediaItem = TODO()
+private fun AyaMediaItem.toExoMediaItem(): MediaItem =
+    MediaItem.Builder()
+        .setUri(ayaFile.toUri())
+        .setTag(this)
+        .build()
 
 private const val CHANNEL_ID_PLAYER = "channel_id_player"
 private const val NOTIFICATION_ID_FOREGROUND_SERVICE = 100001

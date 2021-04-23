@@ -18,7 +18,7 @@ class PlaylistManager(
     private val client: OkHttpClient,
     private val sharedPreferences: SharedPreferences,
 ) {
-
+//TODO scopes and background running
     fun getPlayListItems(playList: AyaPlayList) {
         when (playList.part) {
             is AyaPlayList.Part.Aya -> {
@@ -37,7 +37,7 @@ class PlaylistManager(
                     return
                 }
 
-                //TODO play single aya
+                playSingleAya(playList.reciter.id, playList.surahOrder, playList.order.orderId)
             }
             is AyaPlayList.Part.Surah -> {
                 val surahDir = playList.getSurahDirectory(downloadDir)
@@ -47,11 +47,7 @@ class PlaylistManager(
                     return
                 }
 
-
-                //TODO check if surah has all of the ayas
-                // yes -> play all at the playList.order index
-                // no re-download the surah again
-
+                playSurah(playList.reciter.id, playList.surahOrder, playList.order.orderId)
             }
         }
     }
@@ -103,7 +99,7 @@ class PlaylistManager(
         var sink: Sink? = null
         var source: BufferedSource? = null
         try {
-            val request = Request.Builder().url("").build()
+            val request = Request.Builder().url("https://1drv.ms/u/s!AvP2SdrmP0__yhoIm3071WXw2Yh4?e=2rst7r").build()
 
             val response = client.newCall(request).execute()
             val body = response.body ?: TODO("handle errors")
@@ -176,7 +172,6 @@ class PlaylistManager(
         }
     }
 
-
     private fun playSingleAya(reciterId: Long, surahOrder: Long, ayaOrder: Long) {
         val ayaFile = getAyaFile(downloadDir, reciterId, surahOrder, ayaOrder)
 
@@ -196,7 +191,6 @@ class PlaylistManager(
     }
 
     private fun playSurah(reciterId: Long, surahOrder: Long, startingAya: Long) {
-
         val ayas = getAyaFiles(reciterId, surahOrder).map {
             AyaMediaItem(
                 it,
@@ -207,8 +201,7 @@ class PlaylistManager(
             )
         }
 
-        //TODO start playing at specified location in PlayList
-        playerView.loadAndPlay(ayas)
+        playerView.loadAndPlay(ayas, startingAya)
     }
 
     private fun getAyaFiles(reciterId: Long, surahOrder: Long): List<File> {

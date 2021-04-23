@@ -1,6 +1,7 @@
 package com.worldsnas.mediasessionsample
 
 import android.os.Parcelable
+import com.worldsnas.mediasessionsample.AyaMediaItem.Companion.STARTING_AYA_ORDER_ID
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -22,7 +23,7 @@ data class AyaPlayList(
         data class Id(val id: Long) : StartingAya(id)
 
         @Parcelize
-        object Beginning : StartingAya(0)
+        object Beginning : StartingAya(STARTING_AYA_ORDER_ID)
     }
 
     sealed class Part : Parcelable {

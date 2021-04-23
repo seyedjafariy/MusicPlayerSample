@@ -10,4 +10,8 @@ data class AyaMediaItem(
 
     val surahName: String,
     val reciterName: String,
-)
+){
+    companion object {
+        internal const val STARTING_AYA_ORDER_ID = 0L
+    }
+}
