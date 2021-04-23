@@ -16,10 +16,10 @@ data class AyaPlayList(
         const val EXTRA_KEY_AYA_MEDIA_ITEM = "extra_key_aya_media_item"
     }
 
-    sealed class StartingAya(val orderId : Long) : Parcelable{
+    sealed class StartingAya(val orderId: Long) : Parcelable {
 
         @Parcelize
-        data class Id(val id : Long) : StartingAya(id)
+        data class Id(val id: Long) : StartingAya(id)
 
         @Parcelize
         object Beginning : StartingAya(0)
@@ -34,7 +34,7 @@ data class AyaPlayList(
 //        data class Juz(val order: Long) : Part()
 
         @Parcelize
-        data class Aya(val surahOrder : Long) : Part()
+        data class Aya(val surahOrder: Long) : Part()
     }
 
     @Parcelize
@@ -43,12 +43,12 @@ data class AyaPlayList(
     ) : Parcelable
 
 
-    fun isSameListAndReciter(item : AyaPlayList) : Boolean =
+    fun isSameListAndReciter(item: AyaPlayList): Boolean =
         isSameList(item) && hasSameReciter(item)
 
-    fun isSameList(item : AyaPlayList) : Boolean =
+    fun isSameList(item: AyaPlayList): Boolean =
         part == item.part
 
-    fun hasSameReciter(item : AyaPlayList) : Boolean =
+    fun hasSameReciter(item: AyaPlayList): Boolean =
         reciter == item.reciter
 }

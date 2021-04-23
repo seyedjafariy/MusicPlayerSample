@@ -15,6 +15,9 @@ import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.source.ConcatenatingMediaSource
+import com.google.android.exoplayer2.source.MediaSource
+import com.google.android.exoplayer2.source.ProgressiveMediaSource
+import com.google.android.exoplayer2.upstream.FileDataSource
 
 class PlayerView(
     private val context: Service,
@@ -24,7 +27,8 @@ class PlayerView(
 ) {
     private val notificationManager = NotificationManagerCompat.from(context)
 
-    private val mediaSource = ConcatenatingMediaSource()
+    private val mediaSourceBag = ConcatenatingMediaSource()
+    private val dataSourceFactory = FileDataSource.Factory()
 
     init {
         player.addListener(object : Player.EventListener {
@@ -45,6 +49,11 @@ class PlayerView(
             }
         })
 
+        player.addMediaSource(mediaSourceBag)
+
+        player.prepare()
+
+        //TODO, when are we going to show the first notification for the service?
         showNotification()
     }
 
@@ -75,9 +84,9 @@ class PlayerView(
 
 
     fun playAya(orderId: Long) {
-        repeat(mediaSource.size) {
+        repeat(mediaSourceBag.size) {
             val mediaItem =
-                mediaSource.getMediaSource(it).mediaItem.playbackProperties?.tag as AyaMediaItem
+                mediaSourceBag.getMediaSource(it).mediaItem.playbackProperties?.tag as AyaMediaItem
             if (mediaItem.ayaOrder == orderId) {
                 player.seekToDefaultPosition(it)
                 play()
@@ -85,7 +94,22 @@ class PlayerView(
             }
         }
 
-        error("orderId= $orderId, was not found in the currentPlayList= $mediaSource")
+        error("orderId= $orderId, was not found in the currentPlayList= $mediaSourceBag")
+    }
+
+    fun loadAndPlay(ayaMediaItem: AyaMediaItem) {
+        playMediaSource(listOf(ayaMediaItem.createMediaSource()))
+    }
+
+    fun loadAndPlay(items: List<AyaMediaItem>) {
+        playMediaSource(items.map { it.createMediaSource() })
+    }
+
+    private fun playMediaSource(sources: List<MediaSource>) {
+        mediaSourceBag.clear()
+        mediaSourceBag.addMediaSources(sources)
+
+        play()
     }
 
     fun isPaused(): Boolean =
@@ -211,7 +235,12 @@ class PlayerView(
         Intent(context, PlayerService::class.java).apply {
             this.action = action
         }
+
+    private fun AyaMediaItem.createMediaSource() : MediaSource =
+        ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(toExoMediaItem())
 }
+
+private fun AyaMediaItem.toExoMediaItem(): MediaItem = TODO()
 
 private const val CHANNEL_ID_PLAYER = "channel_id_player"
 private const val NOTIFICATION_ID_FOREGROUND_SERVICE = 100001

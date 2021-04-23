@@ -1,11 +1,13 @@
 package com.worldsnas.mediasessionsample
 
+import java.io.File
+
 data class AyaMediaItem(
-    val filePath : String,
+    val ayaFile: File,
 
-    val ayaOrder : Long,
-    val surahOrder : Long,
+    val ayaOrder: Long,
+    val surahOrder: Long,
 
-    val surahName : String,
-    val reciterName : String,
+    val surahName: String,
+    val reciterName: String,
 )

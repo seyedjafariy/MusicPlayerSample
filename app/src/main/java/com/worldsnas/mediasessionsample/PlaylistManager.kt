@@ -4,9 +4,11 @@ import android.content.SharedPreferences
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.internal.closeQuietly
-import okio.*
+import okio.BufferedSource
+import okio.Sink
+import okio.buffer
+import okio.sink
 import java.io.*
-import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
@@ -18,27 +20,19 @@ class PlaylistManager(
 ) {
 
     fun getPlayListItems(playList: AyaPlayList) {
-        val reciterDir = File(downloadDir, playList.reciter.id.toString())
-
-        if (!reciterDir.exists()) {
-
-            //TODO start downloading the recites
-            return
-        }
-
         when (playList.part) {
             is AyaPlayList.Part.Aya -> {
-                val surahDir = File(reciterDir, playList.part.surahOrder.toString())
+                val surahDir = playList.getSurahDirectory(downloadDir)
 
                 if (!surahDir.exists()) {
-                    // TODO download
+                    downloadAndPlay(playList)
                     return
                 }
 
-                val audioFile = File(surahDir, playList.order.orderId.toString() + ".mp3")
+                val audioFile = playList.getAyaAudioFile(downloadDir)
 
                 if (!audioFile.exists()) {
-                    // TODO download
+                    downloadAndPlay(playList)
 
                     return
                 }
@@ -46,10 +40,10 @@ class PlaylistManager(
                 //TODO play single aya
             }
             is AyaPlayList.Part.Surah -> {
-                val surahDir = File(reciterDir, playList.part.order.toString())
+                val surahDir = playList.getSurahDirectory(downloadDir)
 
                 if (!surahDir.exists()) {
-                    // TODO download
+                    downloadAndPlay(playList)
                     return
                 }
 
@@ -62,7 +56,22 @@ class PlaylistManager(
         }
     }
 
-    private fun downloadAndUnZipSurah(reciterId : String, surahOrder : String) {
+    private fun downloadAndPlay(playList: AyaPlayList) = with(playList) {
+        downloadAndUnZipSurah(reciter.id.toString(), surahOrder.toString())
+
+        when (part) {
+            is AyaPlayList.Part.Aya -> {
+                playSingleAya(reciter.id, surahOrder, order.orderId)
+            }
+            is AyaPlayList.Part.Surah -> {
+                playSurah(reciter.id, surahOrder, order.orderId)
+            }
+        }
+
+        //TODO store playList in SharedPreferences for future BrowserService lookups
+    }
+
+    private fun downloadAndUnZipSurah(reciterId: String, surahOrder: String) {
         val reciteDirectory = File(downloadDir, reciterId)
 
         if (!reciteDirectory.exists()) {
@@ -70,7 +79,7 @@ class PlaylistManager(
         }
 
         val downloadedSurahZip = File(reciteDirectory, "$surahOrder.zip")
-        if(!downloadedSurahZip.exists())
+        if (!downloadedSurahZip.exists())
             downloadSurahZip(reciterId, surahOrder)
 
         // we should unzip it now
@@ -78,12 +87,10 @@ class PlaylistManager(
 
         //we delete to avoid the extra space
         downloadedSurahZip.delete()
-
-        //folder has been downloaded
     }
 
-    private fun downloadSurahZip(reciterId : String, surahOrder : String) {
-        val reciteDirectory = File(downloadDir, reciterId)
+    private fun downloadSurahZip(reciterId: String, surahOrder: String) {
+        val reciteDirectory = getReciterDirectory(downloadDir, reciterId)
 
         val tempReciteFile = File(reciteDirectory, "$surahOrder$PREFIX_ZIP_FILE_TEMP.zip")
         if (tempReciteFile.exists()) {
@@ -93,8 +100,8 @@ class PlaylistManager(
         }
 
 
-        var sink : Sink? = null
-        var source : BufferedSource? = null
+        var sink: Sink? = null
+        var source: BufferedSource? = null
         try {
             val request = Request.Builder().url("").build()
 
@@ -122,7 +129,7 @@ class PlaylistManager(
                 bytesRead = source.read(sink, bufferSize)
             }
             sink.flush();
-        } catch (e : IOException) {
+        } catch (e: IOException) {
             e.printStackTrace();
             //TODO handle download errors
         } finally {
@@ -135,8 +142,7 @@ class PlaylistManager(
 
     }
 
-    @Throws(IOException::class)
-    fun unzip(zipFile: File, targetDirectory: File) {
+    private fun unzip(zipFile: File, targetDirectory: File) {
         val zis = ZipInputStream(
             BufferedInputStream(FileInputStream(zipFile))
         )
@@ -169,6 +175,45 @@ class PlaylistManager(
             zis.close()
         }
     }
+
+
+    private fun playSingleAya(reciterId: Long, surahOrder: Long, ayaOrder: Long) {
+        val ayaFile = getAyaFile(downloadDir, reciterId, surahOrder, ayaOrder)
+
+        //TODO get reciter name and picture,
+        // get surahName (in device locale not the app)
+
+        playerView.loadAndPlay(
+            AyaMediaItem(
+                ayaFile,
+
+                ayaOrder,
+                surahOrder,
+                "",
+                ""
+            )
+        )
+    }
+
+    private fun playSurah(reciterId: Long, surahOrder: Long, startingAya: Long) {
+
+        val ayas = getAyaFiles(reciterId, surahOrder).map {
+            AyaMediaItem(
+                it,
+                it.nameWithoutExtension.toLong(),
+                surahOrder,
+                "",
+                ""
+            )
+        }
+
+        //TODO start playing at specified location in PlayList
+        playerView.loadAndPlay(ayas)
+    }
+
+    private fun getAyaFiles(reciterId: Long, surahOrder: Long): List<File> {
+        return getSurahDirectory(downloadDir, reciterId, surahOrder).listFiles()!!.toList()
+    }
 }
 
-const val PREFIX_ZIP_FILE_TEMP = "-temp"
+private const val PREFIX_ZIP_FILE_TEMP = "-temp"
