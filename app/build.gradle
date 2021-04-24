@@ -2,6 +2,7 @@ plugins {
     id 'com.android.application'
     id 'kotlin-android'
     id 'kotlin-parcelize'
+    id 'kotlinx-serialization'
 }
 
 android {
@@ -54,6 +55,8 @@ dependencies {
 
     implementation "androidx.media2:media2-session:1.1.2"
     implementation "androidx.mediarouter:mediarouter:1.2.2"
+
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.1.0"
 
     implementation("com.squareup.okhttp3:okhttp:4.9.1")
 

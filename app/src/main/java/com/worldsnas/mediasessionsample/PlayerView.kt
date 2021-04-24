@@ -36,7 +36,7 @@ class PlayerView(
         player.addListener(object : Player.EventListener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 super.onIsPlayingChanged(isPlaying)
-                showNotification()
+                showPlayingNotification()
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -54,36 +54,32 @@ class PlayerView(
         player.addMediaSource(mediaSourceBag)
 
         player.prepare()
-
-        //TODO, when are we going to show the first notification for the service?
-        showNotification()
     }
 
     fun play() {
         player.play()
-        showNotification()
+        showPlayingNotification()
     }
 
     fun pause() {
         player.pause()
-        showNotification()
+        showPlayingNotification()
     }
 
     fun stop() {
         player.stop()
-        showNotification()
+        showPlayingNotification()
     }
 
     fun next() {
         player.next()
-        showNotification()
+        showPlayingNotification()
     }
 
     fun previous() {
         player.previous()
-        showNotification()
+        showPlayingNotification()
     }
-
 
     fun playAya(orderId: Long) {
         repeat(mediaSourceBag.size) {
@@ -110,7 +106,7 @@ class PlayerView(
 
         if (startingAya == STARTING_AYA_ORDER_ID) {
             play()
-        }else{
+        } else {
             playAya(startingAya)
         }
     }
@@ -125,8 +121,7 @@ class PlayerView(
                 && !player.playWhenReady
                 && player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
 
-
-    private fun showNotification() {
+    private fun showPlayingNotification() {
         createNotificationChannel()
 
         val contentIntent = createLauncherIntent()
@@ -148,7 +143,7 @@ class PlayerView(
             .setWhen(0)
 
         if (player.isPlaying) {
-            val pendingIntentPause = createServicePendingIntent(PlayerAction.Pause)
+            val pendingIntentPause = createActionPendingIntent(PlayerAction.Pause)
             notificationBuilder.addAction(
                 NotificationCompat.Action.Builder(
                     R.drawable.ic_pause_black_24dp,
@@ -157,7 +152,7 @@ class PlayerView(
                 ).build()
             )
         } else {
-            val pendingIntentPlay = createServicePendingIntent(PlayerAction.Play)
+            val pendingIntentPlay = createActionPendingIntent(PlayerAction.Play)
             notificationBuilder.addAction(
                 NotificationCompat.Action.Builder(
                     R.drawable.ic_play_black_24dp,
@@ -167,7 +162,7 @@ class PlayerView(
             )
         }
 
-        val pendingIntentPrev = createServicePendingIntent(PlayerAction.PreviousAya)
+        val pendingIntentPrev = createActionPendingIntent(PlayerAction.PreviousAya)
         notificationBuilder.addAction(
             NotificationCompat.Action.Builder(
                 R.drawable.ic_rewind_black_24dp,
@@ -176,7 +171,7 @@ class PlayerView(
             ).build()
         )
 
-        val pendingIntentNextAya = createServicePendingIntent(PlayerAction.NextAya)
+        val pendingIntentNextAya = createActionPendingIntent(PlayerAction.NextAya)
         notificationBuilder.addAction(
             NotificationCompat.Action.Builder(
                 R.drawable.ic_fast_forward_black_24dp,
@@ -185,7 +180,7 @@ class PlayerView(
             ).build()
         )
 
-        val pendingIntentStop = createServicePendingIntent(PlayerAction.Stop)
+        val pendingIntentStop = createActionPendingIntent(PlayerAction.Stop)
         notificationBuilder.addAction(
             NotificationCompat.Action.Builder(
                 R.drawable.ic_stop_circle_black_24dp,
@@ -194,11 +189,7 @@ class PlayerView(
             ).build()
         )
 
-
-        context.startForeground(
-            NOTIFICATION_ID_FOREGROUND_SERVICE,
-            notificationBuilder.build()
-        )
+        notificationBuilder.show()
     }
 
     private fun createLauncherIntent(): PendingIntent {
@@ -231,7 +222,7 @@ class PlayerView(
         }
     }
 
-    private fun createServicePendingIntent(action: PlayerAction): PendingIntent =
+    private fun createActionPendingIntent(action: PlayerAction): PendingIntent =
         PendingIntent.getService(
             context,
             action.requestCode,
@@ -243,6 +234,34 @@ class PlayerView(
         Intent(context, PlayerService::class.java).apply {
             this.action = action
         }
+
+    fun showDownloading(
+        surahName: String,
+        reciterName: String,
+        progress: Int?
+    ) {
+        createNotificationChannel()
+
+        val contentIntent = createLauncherIntent()
+
+        NotificationCompat.Builder(context, CHANNEL_ID_PLAYER)
+            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setContentTitle("Downloading")
+            .setContentText("Surah $surahName, Reciter $reciterName")
+            .setProgress(100, progress ?: 0, progress == null)
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setWhen(0)
+            .show()
+    }
+
+    private fun NotificationCompat.Builder.show() {
+        build().let {
+            context.startForeground(NOTIFICATION_ID_FOREGROUND_SERVICE, it)
+        }
+    }
 
     private fun AyaMediaItem.createMediaSource(): MediaSource =
         ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(toExoMediaItem())

@@ -1,6 +1,10 @@
 package com.worldsnas.mediasessionsample
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
+import kotlinx.coroutines.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.internal.closeQuietly
@@ -13,13 +17,14 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
 class PlaylistManager(
+    scope: CoroutineScope,
     private val downloadDir: File,
     private val playerView: PlayerView,
     private val client: OkHttpClient,
     private val sharedPreferences: SharedPreferences,
-) {
-//TODO scopes and background running
-    fun getPlayListItems(playList: AyaPlayList) {
+) : CoroutineScope by scope + SupervisorJob() {
+
+    fun loadAndPlay(playList: AyaPlayList) {
         when (playList.part) {
             is AyaPlayList.Part.Aya -> {
                 val surahDir = playList.getSurahDirectory(downloadDir)
@@ -33,11 +38,10 @@ class PlaylistManager(
 
                 if (!audioFile.exists()) {
                     downloadAndPlay(playList)
-
                     return
                 }
 
-                playSingleAya(playList.reciter.id, playList.surahOrder, playList.order.orderId)
+                playlistReady(playList)
             }
             is AyaPlayList.Part.Surah -> {
                 val surahDir = playList.getSurahDirectory(downloadDir)
@@ -47,14 +51,23 @@ class PlaylistManager(
                     return
                 }
 
-                playSurah(playList.reciter.id, playList.surahOrder, playList.order.orderId)
+                playlistReady(playList)
             }
         }
     }
 
-    private fun downloadAndPlay(playList: AyaPlayList) = with(playList) {
-        downloadAndUnZipSurah(reciter.id.toString(), surahOrder.toString())
+    private fun downloadAndPlay(playList: AyaPlayList) = launch {
+        with(playList) {
+            //TODO handle concurrency
+            // ex:. if we receive a play command and immediately receive another one
+            // we should decide what we should do with previous process
+            downloadAndUnZipSurah(reciter.id.toString(), surahOrder.toString())
 
+            playlistReady(playList)
+        }
+    }
+
+    private fun playlistReady(playList: AyaPlayList) = with(playList) {
         when (part) {
             is AyaPlayList.Part.Aya -> {
                 playSingleAya(reciter.id, surahOrder, order.orderId)
@@ -64,81 +77,96 @@ class PlaylistManager(
             }
         }
 
-        //TODO store playList in SharedPreferences for future BrowserService lookups
+        //storing the last played
+        sharedPreferences.edit(false) {
+            putString(KEY_LAST_PLAYLIST, json.encodeToString(playList))
+        }
     }
 
-    private fun downloadAndUnZipSurah(reciterId: String, surahOrder: String) {
-        val reciteDirectory = File(downloadDir, reciterId)
+    private suspend fun downloadAndUnZipSurah(reciterId: String, surahOrder: String) =
+        withContext(Dispatchers.IO) {
+            val reciteDirectory = File(downloadDir, reciterId)
 
-        if (!reciteDirectory.exists()) {
-            reciteDirectory.mkdirs()
+            if (!reciteDirectory.exists()) {
+                reciteDirectory.mkdirs()
+            }
+
+            val downloadedSurahZip = File(reciteDirectory, "$surahOrder.zip")
+            if (!downloadedSurahZip.exists())
+                downloadSurahZip(reciterId, surahOrder)
+
+            // we should unzip it now
+            showDownloading("حمد", "عبدل باسط", 85)
+            unzip(downloadedSurahZip, File(reciteDirectory, surahOrder))
+
+            //we delete to avoid the extra space
+            downloadedSurahZip.delete()
         }
 
-        val downloadedSurahZip = File(reciteDirectory, "$surahOrder.zip")
-        if (!downloadedSurahZip.exists())
-            downloadSurahZip(reciterId, surahOrder)
+    private suspend fun downloadSurahZip(reciterId: String, surahOrder: String) =
+        withContext(Dispatchers.IO) {
+            showDownloading("حمد", "عبدل باسط", null)
 
-        // we should unzip it now
-        unzip(downloadedSurahZip, File(reciteDirectory, surahOrder))
+            val reciteDirectory = getReciterDirectory(downloadDir, reciterId)
 
-        //we delete to avoid the extra space
-        downloadedSurahZip.delete()
-    }
+            val tempReciteFile = File(reciteDirectory, "$surahOrder$PREFIX_ZIP_FILE_TEMP.zip")
+            if (tempReciteFile.exists()) {
+                //TODO support resuming
+                tempReciteFile.delete()
+                tempReciteFile.createNewFile()
+            }
 
-    private fun downloadSurahZip(reciterId: String, surahOrder: String) {
-        val reciteDirectory = getReciterDirectory(downloadDir, reciterId)
+            var sink: Sink? = null
+            var source: BufferedSource? = null
+            try {
+                val request =
+                    Request.Builder()
+                        .url("https://1drv.ms/u/s!AvP2SdrmP0__yhoIm3071WXw2Yh4?e=2rst7r")
+                        .build()
 
-        val tempReciteFile = File(reciteDirectory, "$surahOrder$PREFIX_ZIP_FILE_TEMP.zip")
-        if (tempReciteFile.exists()) {
-            //TODO support resuming
-            tempReciteFile.delete()
-            tempReciteFile.createNewFile()
-        }
+                val response = client.newCall(request).execute()
+                val body = response.body ?: TODO("handle errors")
+                val contentLength = body.contentLength()
 
+                source = body.source()
+                sink = tempReciteFile.sink().buffer().buffer
 
-        var sink: Sink? = null
-        var source: BufferedSource? = null
-        try {
-            val request = Request.Builder().url("https://1drv.ms/u/s!AvP2SdrmP0__yhoIm3071WXw2Yh4?e=2rst7r").build()
-
-            val response = client.newCall(request).execute()
-            val body = response.body ?: TODO("handle errors")
-            val contentLength = body.contentLength()
-
-            source = body.source()
-            sink = tempReciteFile.sink().buffer().buffer
-
-            var totalRead = 0L
-            var bufferSize: Long = 8 * 1024
-            var bytesRead = 0L;
-
-            bytesRead = source.read(sink, bufferSize)
-            while (bytesRead != -1L) {
-                sink.emit();
-                totalRead += bytesRead;
-                val progress = ((totalRead * 100) / contentLength).toInt()
-
-                //TODO publish progress
-//            subscriber.onNext(progress);
-
+                var totalRead = 0L
+                val bufferSize: Long = 8 * 1024
+                var bytesRead: Long
 
                 bytesRead = source.read(sink, bufferSize)
+                while (isActive && bytesRead != -1L) {
+                    sink.emit()
+                    totalRead += bytesRead
+                    val progress = ((totalRead * 80) / contentLength).toInt()
+
+                    showDownloading("حمد", "عبدل باسط", progress)
+
+                    bytesRead = source.read(sink, bufferSize)
+                }
+                sink.flush()
+            } catch (e: IOException) {
+                e.printStackTrace()
+                //TODO handle download errors
+            } finally {
+                source?.closeQuietly()
+                sink?.closeQuietly()
             }
-            sink.flush();
-        } catch (e: IOException) {
-            e.printStackTrace();
-            //TODO handle download errors
-        } finally {
-            source?.closeQuietly()
-            sink?.closeQuietly()
+
+            //rename the file so we know it's been downloaded completely
+            tempReciteFile.renameTo(
+                File(
+                    tempReciteFile.absolutePath.replace(
+                        PREFIX_ZIP_FILE_TEMP,
+                        ""
+                    )
+                )
+            )
+
         }
 
-        //rename the file so we know it's been downloaded completely
-        tempReciteFile.renameTo(File(tempReciteFile.absolutePath.replace(PREFIX_ZIP_FILE_TEMP, "")))
-
-    }
-
-    private fun unzip(zipFile: File, targetDirectory: File) {
+    private suspend fun unzip(zipFile: File, targetDirectory: File) = withContext(Dispatchers.IO) {
         val zis = ZipInputStream(
             BufferedInputStream(FileInputStream(zipFile))
         )
@@ -207,6 +235,15 @@ class PlaylistManager(
     private fun getAyaFiles(reciterId: Long, surahOrder: Long): List<File> {
         return getSurahDirectory(downloadDir, reciterId, surahOrder).listFiles()!!.toList()
     }
+
+    private suspend fun showDownloading(surahName: String, reciterName: String, progress: Int?) =
+        withContext(Dispatchers.Main) {
+            playerView.showDownloading(surahName, reciterName, progress)
+        }
+}
+
+private val json = Json {
 }
 
 private const val PREFIX_ZIP_FILE_TEMP = "-temp"
+private const val KEY_LAST_PLAYLIST = "KEY_LAST_PLAYLIST"

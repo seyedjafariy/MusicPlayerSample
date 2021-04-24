@@ -15,19 +15,23 @@ import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.ext.media2.SessionPlayerConnector
 import com.google.android.exoplayer2.source.ClippingMediaSource
-import com.google.android.exoplayer2.source.ConcatenatingMediaSource
 import com.google.android.exoplayer2.source.MediaSource
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.upstream.AssetDataSource
 import com.google.android.exoplayer2.upstream.DataSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import okhttp3.OkHttpClient
 import java.io.File
 
-class PlayerService : MediaBrowserServiceCompat() {
+class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope() {
 
     lateinit var notificationManager: NotificationManager
     lateinit var mediaSession: MediaSession
     lateinit var player: SimpleExoPlayer
     lateinit var playerView: PlayerView
+    lateinit var playlistManager: PlaylistManager
 
     var currentPlayList: AyaPlayList? = null
 
@@ -62,9 +66,10 @@ class PlayerService : MediaBrowserServiceCompat() {
 
         playerView = PlayerView(this, player, mediaSession.sessionCompatToken)
 
-
+        val sharedPreferences = getSharedPreferences("music-player", Context.MODE_PRIVATE)
+        val client = OkHttpClient.Builder().build()
         val downloadDirectory = File(getExternalFilesDir(null), "recites")
-//        loadAssetSource()
+        playlistManager = PlaylistManager(this, downloadDirectory, playerView, client, sharedPreferences)
     }
 
 
@@ -82,6 +87,7 @@ class PlayerService : MediaBrowserServiceCompat() {
 
     override fun onDestroy() {
         super.onDestroy()
+        cancel()
         PlayerManager.releasePlayer()
         mediaSession.close()
     }
@@ -151,17 +157,15 @@ class PlayerService : MediaBrowserServiceCompat() {
         if (newPlayList == null) {
             if (playerView.isPaused()) {
                 playerView.play()
-            } else {
-                //TODO we should find the last playList and start playing it.
             }
 
-            //player.isStopped
+            //check if stopped and service is not working,
+            // if yes we should load last playlist and start playing it
         } else {
             val currentItem = currentPlayList
             if (currentItem == null) {
-                //TODO just started the service, we should start the play.
                 currentPlayList = newPlayList
-
+                playlistManager.loadAndPlay(newPlayList)
             } else {
                 if (currentItem.isSameListAndReciter(newPlayList)) {
                     //same range, just check for current playing aya
@@ -173,8 +177,8 @@ class PlayerService : MediaBrowserServiceCompat() {
                         playerView.playAya(newPlayList.order.orderId)
                     }
                 } else {
-                    //TODO the playList has changed so, we need to start playing all new
-
+                    currentPlayList = newPlayList
+                    playlistManager.loadAndPlay(newPlayList)
                 }
             }
         }
