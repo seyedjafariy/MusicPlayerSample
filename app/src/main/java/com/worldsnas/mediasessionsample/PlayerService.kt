@@ -168,6 +168,7 @@ class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope()
                 playlistManager.loadAndPlay(newPlayList)
             } else {
                 if (currentItem.isSameListAndReciter(newPlayList)) {
+                    //TODO Crashes
                     //same range, just check for current playing aya
                     val currentMediaItem =
                         player.currentMediaItem?.playbackProperties?.tag as AyaMediaItem

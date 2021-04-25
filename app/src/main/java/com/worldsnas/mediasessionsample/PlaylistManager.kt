@@ -121,7 +121,7 @@ class PlaylistManager(
             try {
                 val request =
                     Request.Builder()
-                        .url("https://drive.google.com/uc?export=download&id=1mRlLUc1_ji1Ny-k7A-99xACgnArzk39K")
+                        .url("https://everyayah.com/data/Abdul_Basit_Murattal_64kbps/zips/001.zip")
                         .build()
 
                 val response = client.newCall(request).execute()
