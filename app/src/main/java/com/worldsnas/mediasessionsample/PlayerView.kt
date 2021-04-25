@@ -114,6 +114,8 @@ class PlayerView(
     private fun loadMediaSource(sources: List<MediaSource>) {
         mediaSourceBag.clear()
         mediaSourceBag.addMediaSources(sources)
+        player.setMediaSource(mediaSourceBag)
+        player.prepare()
     }
 
     fun isPaused(): Boolean =

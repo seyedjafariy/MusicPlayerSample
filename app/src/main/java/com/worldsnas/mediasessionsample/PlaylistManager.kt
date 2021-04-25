@@ -126,26 +126,52 @@ class PlaylistManager(
 
                 val response = client.newCall(request).execute()
                 val body = response.body ?: TODO("handle errors")
-                val contentLength = body.contentLength()
 
-                source = body.source()
-                sink = tempReciteFile.sink().buffer().buffer
 
-                var totalRead = 0L
-                val bufferSize: Long = 8 * 1024
-                var bytesRead: Long
+                var inputStream: InputStream? = null;
+                val output: OutputStream = FileOutputStream(tempReciteFile)
+                try {
+                    inputStream = response.body?.byteStream()
 
-                bytesRead = source.read(sink, bufferSize)
-                while (isActive && bytesRead != -1L) {
-                    sink.emit()
-                    totalRead += bytesRead
-                    val progress = ((totalRead * 80) / contentLength).toInt()
+                    val buff = ByteArray(1024 * 4)
+                    var downloaded = 0L;
 
-                    showDownloading("حمد", "عبدل باسط", progress)
+//                    publishProgress(0L, target);
+                    while (true) {
+                        val readed = inputStream!!.read(buff);
 
-                    bytesRead = source.read(sink, bufferSize)
+                        if (!isActive || readed == -1) {
+                            break
+                        }
+                        output.write(buff, 0, readed);
+                        //write buff
+                        downloaded += readed;
+//                        publishProgress(downloaded, target);
+                    }
+                } finally {
+                    output.flush();
+                    output.close();
+
                 }
-                sink.flush()
+
+//                source = body.source()
+//                sink = tempReciteFile.sink().buffer().buffer
+//
+//                var totalRead = 0L
+//                val bufferSize: Long = 8 * 1024
+//                var bytesRead: Long
+//
+//                bytesRead = source.read(sink, bufferSize)
+//                while (isActive && bytesRead != -1L) {
+//                    sink.emit()
+//                    totalRead += bytesRead
+//                    val progress = ((totalRead * 80) / contentLength).toInt()
+//
+//                    showDownloading("حمد", "عبدل باسط", progress)
+//
+//                    bytesRead = source.read(sink, bufferSize)
+//                }
+//                sink.flush()
             } catch (e: IOException) {
                 e.printStackTrace()
                 //TODO handle download errors
@@ -219,15 +245,19 @@ class PlaylistManager(
     }
 
     private fun playSurah(reciterId: Long, surahOrder: Long, startingAya: Long) {
-        val ayas = getAyaFiles(reciterId, surahOrder).map {
-            AyaMediaItem(
-                it,
-                it.nameWithoutExtension.toLong(),
-                surahOrder,
-                "",
-                ""
-            )
-        }
+        val ayas = getAyaFiles(reciterId, surahOrder)
+            .filter {
+                it.extension == EXT_AUDIO_MP3
+            }
+            .map {
+                AyaMediaItem(
+                    it,
+                    it.nameWithoutExtension.toLong(),
+                    surahOrder,
+                    "",
+                    ""
+                )
+            }
 
         playerView.loadAndPlay(ayas, startingAya)
     }
@@ -245,5 +275,6 @@ class PlaylistManager(
 private val json = Json {
 }
 
+private const val EXT_AUDIO_MP3 = "mp3"
 private const val PREFIX_ZIP_FILE_TEMP = "-temp"
 private const val KEY_LAST_PLAYLIST = "KEY_LAST_PLAYLIST"
