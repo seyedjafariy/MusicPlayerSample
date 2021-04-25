@@ -10,8 +10,6 @@ import okhttp3.Request
 import okhttp3.internal.closeQuietly
 import okio.BufferedSource
 import okio.Sink
-import okio.buffer
-import okio.sink
 import java.io.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -63,6 +61,8 @@ class PlaylistManager(
             // we should decide what we should do with previous process
             downloadAndUnZipSurah(reciter.id.toString(), surahOrder.toString())
 
+
+            //TODO the download notification does not go away after downloading is overing
             playlistReady(playList)
         }
     }
@@ -95,6 +95,11 @@ class PlaylistManager(
             if (!downloadedSurahZip.exists())
                 downloadSurahZip(reciterId, surahOrder)
 
+            //check if download was successful
+            if (!downloadedSurahZip.exists()) {
+                return@withContext
+            }
+
             // we should unzip it now
             showDownloading("حمد", "عبدل باسط", 85)
             unzip(downloadedSurahZip, File(reciteDirectory, surahOrder))
@@ -125,20 +130,25 @@ class PlaylistManager(
                         .build()
 
                 val response = client.newCall(request).execute()
-                val body = response.body ?: TODO("handle errors")
 
+                val body = response.body
+                if (body == null) {
+                    mainThreadView { showDownloadFailed("حمد", "عبدلباسط") }
+                    return@withContext
+                }
 
                 var inputStream: InputStream? = null;
-                val output: OutputStream = FileOutputStream(tempReciteFile)
+                val output: OutputStream = BufferedOutputStream(FileOutputStream(tempReciteFile))
                 try {
-                    inputStream = response.body?.byteStream()
 
-                    val buff = ByteArray(1024 * 4)
-                    var downloaded = 0L;
+                    inputStream = body.byteStream()
+                    val contentLength = body.contentLength()
 
-//                    publishProgress(0L, target);
+                    val buff = ByteArray(1024 * 8)
+                    var downloaded = 0L
+
                     while (true) {
-                        val readed = inputStream!!.read(buff);
+                        val readed = inputStream.read(buff)
 
                         if (!isActive || readed == -1) {
                             break
@@ -146,12 +156,15 @@ class PlaylistManager(
                         output.write(buff, 0, readed);
                         //write buff
                         downloaded += readed;
-//                        publishProgress(downloaded, target);
+
+                        val progress = ((downloaded * 80) / contentLength).toInt()
+
+                        showDownloading("حمد", "عبدل باسط", progress)
                     }
                 } finally {
                     output.flush();
                     output.close();
-
+                    inputStream?.close()
                 }
 
 //                source = body.source()
@@ -174,7 +187,10 @@ class PlaylistManager(
 //                sink.flush()
             } catch (e: IOException) {
                 e.printStackTrace()
-                //TODO handle download errors
+                mainThreadView {
+                    showDownloadFailed("حمد", "عبدلباسط")
+                }
+                return@withContext
             } finally {
                 source?.closeQuietly()
                 sink?.closeQuietly()
@@ -267,8 +283,13 @@ class PlaylistManager(
     }
 
     private suspend fun showDownloading(surahName: String, reciterName: String, progress: Int?) =
+        mainThreadView {
+            showDownloading(surahName, reciterName, progress)
+        }
+
+    private suspend inline fun mainThreadView(crossinline block: PlayerView.() -> Unit) =
         withContext(Dispatchers.Main) {
-            playerView.showDownloading(surahName, reciterName, progress)
+            block(playerView)
         }
 }
 

@@ -259,6 +259,29 @@ class PlayerView(
             .show()
     }
 
+    fun showDownloadFailed(
+        surahName: String,
+        reciterName: String,
+    ){
+        createNotificationChannel()
+
+        val contentIntent = createLauncherIntent()
+
+        NotificationCompat.Builder(context, CHANNEL_ID_PLAYER)
+            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setContentTitle("Downloading Failed")
+            .setContentText("Downloading Surah $surahName, By Reciter $reciterName, failed. please check your network connection and try again")
+            .setContentIntent(contentIntent)
+            .setOngoing(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setWhen(0)
+            .build()
+            .apply {
+                notificationManager.notify(NOTIFICATION_ID_DOWNLOAD_FAILED, this)
+            }
+    }
+
     private fun NotificationCompat.Builder.show() {
         build().let {
             context.startForeground(NOTIFICATION_ID_FOREGROUND_SERVICE, it)
@@ -277,3 +300,4 @@ private fun AyaMediaItem.toExoMediaItem(): MediaItem =
 
 private const val CHANNEL_ID_PLAYER = "channel_id_player"
 private const val NOTIFICATION_ID_FOREGROUND_SERVICE = 100001
+private const val NOTIFICATION_ID_DOWNLOAD_FAILED = 100002

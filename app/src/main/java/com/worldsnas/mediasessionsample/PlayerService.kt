@@ -69,7 +69,8 @@ class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope()
         val sharedPreferences = getSharedPreferences("music-player", Context.MODE_PRIVATE)
         val client = OkHttpClient.Builder().build()
         val downloadDirectory = File(getExternalFilesDir(null), "recites")
-        playlistManager = PlaylistManager(this, downloadDirectory, playerView, client, sharedPreferences)
+        playlistManager =
+            PlaylistManager(this, downloadDirectory, playerView, client, sharedPreferences)
     }
 
 
@@ -168,11 +169,12 @@ class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope()
                 playlistManager.loadAndPlay(newPlayList)
             } else {
                 if (currentItem.isSameListAndReciter(newPlayList)) {
-                    //TODO Crashes
                     //same range, just check for current playing aya
                     val currentMediaItem =
-                        player.currentMediaItem?.playbackProperties?.tag as AyaMediaItem
-                    if (currentMediaItem.ayaOrder == newPlayList.order.orderId) {
+                        player.currentMediaItem?.playbackProperties?.tag as? AyaMediaItem
+                    if (currentMediaItem == null) {
+                        playlistManager.loadAndPlay(newPlayList)
+                    } else if (currentMediaItem.ayaOrder == newPlayList.order.orderId) {
                         playerView.play()
                     } else {
                         playerView.playAya(newPlayList.order.orderId)
@@ -203,7 +205,7 @@ class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope()
             source
         }
 
-            //we should pass AyaMediaItem to view and view will take care of it for us
+        //we should pass AyaMediaItem to view and view will take care of it for us
 //        player.setMediaSource(ConcatenatingMediaSource(*sources), true)
 //
 //        player.play()
