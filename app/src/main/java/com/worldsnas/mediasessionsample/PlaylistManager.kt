@@ -121,7 +121,7 @@ class PlaylistManager(
             try {
                 val request =
                     Request.Builder()
-                        .url("https://1drv.ms/u/s!AvP2SdrmP0__yhoIm3071WXw2Yh4?e=2rst7r")
+                        .url("https://drive.google.com/uc?export=download&id=1mRlLUc1_ji1Ny-k7A-99xACgnArzk39K")
                         .build()
 
                 val response = client.newCall(request).execute()
