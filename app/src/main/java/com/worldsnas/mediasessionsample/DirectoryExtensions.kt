@@ -2,6 +2,10 @@ package com.worldsnas.mediasessionsample
 
 import java.io.File
 
+
+fun AyaPlayList.needsDownloading(downloadDir: File) =
+    !getSurahDirectory(downloadDir).exists()
+
 internal fun AyaPlayList.getAyaAudioFile(downloadDir: File): File {
     return getAyaFile(downloadDir, reciter.id, surahOrder, order.orderId)
 }

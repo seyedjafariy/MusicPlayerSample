@@ -82,6 +82,12 @@ class PlayerView(
     }
 
     fun playAya(orderId: Long) {
+        if(orderId == STARTING_AYA_ORDER_ID){
+            player.seekToDefaultPosition(0)
+            play()
+            return
+        }
+
         repeat(mediaSourceBag.size) {
             val mediaItem =
                 mediaSourceBag.getMediaSource(it).mediaItem.playbackProperties?.tag as AyaMediaItem
@@ -109,6 +115,12 @@ class PlayerView(
         } else {
             playAya(startingAya)
         }
+    }
+
+    fun loadAndShow(items: List<AyaMediaItem>){
+        loadMediaSource(items.map { it.createMediaSource() })
+
+        showPlayingNotification()
     }
 
     private fun loadMediaSource(sources: List<MediaSource>) {
@@ -191,7 +203,9 @@ class PlayerView(
             ).build()
         )
 
-        notificationBuilder.show()
+        notificationBuilder.build().apply {
+            context.startForeground(NOTIFICATION_ID_PLAYER, this)
+        }
     }
 
     private fun createLauncherIntent(): PendingIntent {
@@ -252,14 +266,21 @@ class PlayerView(
             .setContentText("Surah $surahName, Reciter $reciterName")
             .setProgress(100, progress ?: 0, progress == null)
             .setContentIntent(contentIntent)
-            .setOngoing(true)
+            .setOngoing(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setWhen(0)
-            .show()
+            .build()
+            .apply {
+                context.startForeground(NOTIFICATION_ID_DOWNLOAD, this)
+            }
     }
 
-    fun showDownloadFailed(
+    fun hideDownloading(){
+        notificationManager.cancel(NOTIFICATION_ID_DOWNLOAD)
+    }
+
+    fun cancelDownloadingAndShowFailed(
         surahName: String,
         reciterName: String,
     ){
@@ -272,7 +293,7 @@ class PlayerView(
             .setContentTitle("Downloading Failed")
             .setContentText("Downloading Surah $surahName, By Reciter $reciterName, failed. please check your network connection and try again")
             .setContentIntent(contentIntent)
-            .setOngoing(true)
+            .setOngoing(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setWhen(0)
@@ -280,12 +301,8 @@ class PlayerView(
             .apply {
                 notificationManager.notify(NOTIFICATION_ID_DOWNLOAD_FAILED, this)
             }
-    }
 
-    private fun NotificationCompat.Builder.show() {
-        build().let {
-            context.startForeground(NOTIFICATION_ID_FOREGROUND_SERVICE, it)
-        }
+        hideDownloading()
     }
 
     private fun AyaMediaItem.createMediaSource(): MediaSource =
@@ -299,5 +316,6 @@ private fun AyaMediaItem.toExoMediaItem(): MediaItem =
         .build()
 
 private const val CHANNEL_ID_PLAYER = "channel_id_player"
-private const val NOTIFICATION_ID_FOREGROUND_SERVICE = 100001
+private const val NOTIFICATION_ID_PLAYER = 100001
 private const val NOTIFICATION_ID_DOWNLOAD_FAILED = 100002
+private const val NOTIFICATION_ID_DOWNLOAD = 100003

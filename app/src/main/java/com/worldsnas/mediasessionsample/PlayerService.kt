@@ -25,6 +25,8 @@ import kotlinx.coroutines.cancel
 import okhttp3.OkHttpClient
 import java.io.File
 
+//TODO launching the service with a play action for the first time is very slow.
+// it seems the slowness is happening on the MainThread and causing a lot of frames to be skipped
 class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope() {
 
     lateinit var notificationManager: NotificationManager
@@ -70,7 +72,10 @@ class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope()
         val client = OkHttpClient.Builder().build()
         val downloadDirectory = File(getExternalFilesDir(null), "recites")
         playlistManager =
-            PlaylistManager(this, downloadDirectory, playerView, client, sharedPreferences)
+            PlaylistManager(this, downloadDirectory, playerView, client, sharedPreferences){
+                stopForeground(true)
+                stopSelf()
+            }
     }
 
 
@@ -158,6 +163,8 @@ class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope()
         if (newPlayList == null) {
             if (playerView.isPaused()) {
                 playerView.play()
+            } else {
+                playlistManager.loadAndPlay(playlistManager.getLastPlayList())
             }
 
             //check if stopped and service is not working,
@@ -185,31 +192,5 @@ class PlayerService : MediaBrowserServiceCompat(), CoroutineScope by MainScope()
                 }
             }
         }
-    }
-
-    private fun loadAssetSource() {
-        val assetFactory = DataSource.Factory { AssetDataSource(this) }
-
-        val sources = Array<MediaSource>(8) {
-            val source = ClippingMediaSource(
-                ProgressiveMediaSource.Factory(assetFactory).createMediaSource(
-                    MediaItem.Builder()
-                        .setUri(Uri.parse("asset:///001/00100$it.mp3"))
-                        .setTag("tag")
-                        //set the extra data as MediaID
-                        .setMediaId("")
-                        .build()
-                ),
-                C.TIME_END_OF_SOURCE
-            )
-            source
-        }
-
-        //we should pass AyaMediaItem to view and view will take care of it for us
-//        player.setMediaSource(ConcatenatingMediaSource(*sources), true)
-//
-//        player.play()
-//
-//        player.prepare()
     }
 }

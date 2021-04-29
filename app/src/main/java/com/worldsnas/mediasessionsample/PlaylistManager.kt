@@ -3,6 +3,7 @@ package com.worldsnas.mediasessionsample
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import kotlinx.coroutines.*
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -20,6 +21,7 @@ class PlaylistManager(
     private val playerView: PlayerView,
     private val client: OkHttpClient,
     private val sharedPreferences: SharedPreferences,
+    private val dismissCallback: () -> Unit
 ) : CoroutineScope by scope + SupervisorJob() {
 
     fun loadAndPlay(playList: AyaPlayList) {
@@ -54,26 +56,41 @@ class PlaylistManager(
         }
     }
 
+    fun getLastPlayList(): AyaPlayList {
+        val lastPlayList = sharedPreferences.getString(KEY_LAST_PLAYLIST, null) ?: error(
+            """
+            no last playlist has been stored.
+        """.trimIndent()
+        )
+
+        return json.decodeFromString(lastPlayList)
+    }
+
     private fun downloadAndPlay(playList: AyaPlayList) = launch {
         with(playList) {
             //TODO handle concurrency
             // ex:. if we receive a play command and immediately receive another one
             // we should decide what we should do with previous process
-            downloadAndUnZipSurah(reciter.id.toString(), surahOrder.toString())
+            val downloadSuccessful =
+                downloadAndUnZipSurah(reciter.id.toString(), surahOrder.toString())
 
+            mainThreadView {
+                hideDownloading()
+            }
 
-            //TODO the download notification does not go away after downloading is overing
-            playlistReady(playList)
+            if (downloadSuccessful) {
+                playlistReady(playList)
+            }
         }
     }
 
-    private fun playlistReady(playList: AyaPlayList) = with(playList) {
-        when (part) {
+    private fun playlistReady(playList: AyaPlayList, play: Boolean = true) = with(playList) {
+        val mediaItems = when (part) {
             is AyaPlayList.Part.Aya -> {
-                playSingleAya(reciter.id, surahOrder, order.orderId)
+                listOf(getAyaMediaItem(reciter.id, surahOrder, order.orderId))
             }
             is AyaPlayList.Part.Surah -> {
-                playSurah(reciter.id, surahOrder, order.orderId)
+                getSurahMediaItems(reciter.id, surahOrder)
             }
         }
 
@@ -81,9 +98,15 @@ class PlaylistManager(
         sharedPreferences.edit(false) {
             putString(KEY_LAST_PLAYLIST, json.encodeToString(playList))
         }
+
+        if(play){
+            playerView.loadAndPlay(mediaItems, playList.order.orderId)
+        }else{
+            playerView.loadAndShow(mediaItems)
+        }
     }
 
-    private suspend fun downloadAndUnZipSurah(reciterId: String, surahOrder: String) =
+    private suspend fun downloadAndUnZipSurah(reciterId: String, surahOrder: String): Boolean =
         withContext(Dispatchers.IO) {
             val reciteDirectory = File(downloadDir, reciterId)
 
@@ -97,7 +120,7 @@ class PlaylistManager(
 
             //check if download was successful
             if (!downloadedSurahZip.exists()) {
-                return@withContext
+                return@withContext false
             }
 
             // we should unzip it now
@@ -106,6 +129,8 @@ class PlaylistManager(
 
             //we delete to avoid the extra space
             downloadedSurahZip.delete()
+
+            return@withContext true
         }
 
     private suspend fun downloadSurahZip(reciterId: String, surahOrder: String) =
@@ -133,7 +158,7 @@ class PlaylistManager(
 
                 val body = response.body
                 if (body == null) {
-                    mainThreadView { showDownloadFailed("حمد", "عبدلباسط") }
+                    mainThreadView { cancelDownloadingAndShowFailed("حمد", "عبدلباسط") }
                     return@withContext
                 }
 
@@ -188,7 +213,7 @@ class PlaylistManager(
             } catch (e: IOException) {
                 e.printStackTrace()
                 mainThreadView {
-                    showDownloadFailed("حمد", "عبدلباسط")
+                    downloadingFailed()
                 }
                 return@withContext
             } finally {
@@ -242,26 +267,27 @@ class PlaylistManager(
         }
     }
 
-    private fun playSingleAya(reciterId: Long, surahOrder: Long, ayaOrder: Long) {
+    private fun getAyaMediaItem(reciterId: Long, surahOrder: Long, ayaOrder: Long): AyaMediaItem {
         val ayaFile = getAyaFile(downloadDir, reciterId, surahOrder, ayaOrder)
 
         //TODO get reciter name and picture,
         // get surahName (in device locale not the app)
 
-        playerView.loadAndPlay(
-            AyaMediaItem(
-                ayaFile,
+        return AyaMediaItem(
+            ayaFile,
 
-                ayaOrder,
-                surahOrder,
-                "",
-                ""
-            )
+            ayaOrder,
+            surahOrder,
+            "",
+            ""
         )
     }
 
-    private fun playSurah(reciterId: Long, surahOrder: Long, startingAya: Long) {
-        val ayas = getAyaFiles(reciterId, surahOrder)
+    private fun getSurahMediaItems(
+        reciterId: Long,
+        surahOrder: Long,
+    ): List<AyaMediaItem> {
+        return getAyaFiles(reciterId, surahOrder)
             .filter {
                 it.extension == EXT_AUDIO_MP3
             }
@@ -274,8 +300,6 @@ class PlaylistManager(
                     ""
                 )
             }
-
-        playerView.loadAndPlay(ayas, startingAya)
     }
 
     private fun getAyaFiles(reciterId: Long, surahOrder: Long): List<File> {
@@ -291,6 +315,25 @@ class PlaylistManager(
         withContext(Dispatchers.Main) {
             block(playerView)
         }
+
+    private fun downloadingFailed(){
+        playerView.cancelDownloadingAndShowFailed("حمد", "عبدلباسط")
+
+        if (hasLastPlayed()) {
+            //showLast
+            loadLastPlayed()
+        } else {
+            //nothing to show or play. stopService
+            dismissCallback()
+        }
+    }
+
+    private fun loadLastPlayed() {
+        playlistReady(getLastPlayList(), play= false)
+    }
+
+    fun hasLastPlayed(): Boolean =
+        sharedPreferences.contains(KEY_LAST_PLAYLIST)
 }
 
 private val json = Json {
